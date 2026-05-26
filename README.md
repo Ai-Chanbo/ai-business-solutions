@@ -10,12 +10,20 @@ Modbus TCP通信を用いてPLC相当データを取得し、
 
 PLC実機の代わりにModRSsim2を使用して動作確認を行っています。
 
+設備保全経験とC#開発経験を活かし、
+PLC設備監視を想定した簡易HMIシステムを作成しました。
+
+Modbus TCP通信によるデータ取得、
+HMI表示、
+異常検知、
+ログ保存機能を実装しています。
+
 ---
 
 ## 2. 使用技術
 
 - C#
-- .NET 10
+- .NET 8 LTS
 - HslCommunication
 - Modbus TCP
 - VS Code
@@ -101,7 +109,7 @@ const int Port = 502;
 ### 出力先
 
 ```text
-bin/Debug/net10.0/Logs/
+bin/Debug/net8.0/Logs/
 ```
 
 ### 出力例
@@ -116,16 +124,13 @@ bin/Debug/net10.0/Logs/
 
 ## 7. 今後の改善
 
-- WinForms/WPFによるHMI画面化
+- WPF版への拡張
 - リアルタイムグラフ表示
 - PLC書込み機能追加
-- 設定ファイル化
-- アラーム履歴管理
-- データベース保存対応
 - MQTT/REST API連携
+- データベース保存対応
 - Docker対応
 - クラウド連携
-- 異常検知ロジック高度化
 
 ---
 
@@ -149,3 +154,23 @@ ModRSsim2（PLCシミュレーター）
 - DataGridViewでリアルタイムログ監視を実装
 - 温度閾値による異常検知を追加
 - 通信失敗時の状態表示を実装
+
+## 想定課題
+
+- 設備温度異常の見逃し
+- 稼働状態の可視化不足
+- ログ管理の属人化
+
+## 解決内容
+
+- 温度閾値監視による異常検知
+- HMIによる状態可視化
+- CSVログ自動保存
+
+## HMI画面（正常時）
+
+![正常時](docs/hmi_normal.png)
+
+## HMI画面（異常時）
+
+![異常時](docs/hmi_alarm.png)
