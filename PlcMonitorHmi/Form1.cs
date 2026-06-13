@@ -8,9 +8,7 @@ namespace PlcMonitorHmi;
 
 public partial class Form1 : Form
 {
-    // ──────────────────────────────────────────────────
-    //  既存フィールド（変更なし）
-    // ──────────────────────────────────────────────────
+    // ── 既存フィールド（変更なし） ────────────────────────
     private readonly ModbusTcpNet _modbus = new("127.0.0.1", 502);
     private readonly System.Windows.Forms.Timer _timer = new();
 
@@ -25,17 +23,13 @@ public partial class Form1 : Form
     private const double TemperatureScale = 1000.0;
     private const double AlarmTemperature = 60.0;
 
-    // ──────────────────────────────────────────────────
-    //  ScottPlot フィールド（Version 2、変更なし）
-    // ──────────────────────────────────────────────────
+    // ── ScottPlot フィールド（Version 2、変更なし） ────────
     private FormsPlot _chart = new();
     private readonly List<double> _chartTimes = new(MaxDataPoints + 4);
     private readonly List<double> _chartTemps = new(MaxDataPoints + 4);
-    private const int MaxDataPoints = 600; // 10 分 × 60 秒
+    private const int MaxDataPoints = 600;
 
-    // ──────────────────────────────────────────────────
-    //  アラーム履歴フィールド（Version 3 追加）
-    // ──────────────────────────────────────────────────
+    // ── アラーム履歴フィールド（Version 3、変更なし） ───────
     private bool     _isAlarm       = false;
     private DateTime _alarmStartTime;
     private double   _alarmMaxTemp  = 0.0;
@@ -46,58 +40,63 @@ public partial class Form1 : Form
     private static readonly string AlarmCsvPath =
         Path.Combine(AppContext.BaseDirectory, "Logs", "AlarmHistory.csv");
 
-    // ──────────────────────────────────────────────────
-    //  コンストラクタ
-    // ──────────────────────────────────────────────────
+    // ── Version 4 Phase 4a: 設備診断フィールド ───────────
+    private int _commFailCount = 0;
+    private const int CommFailThreshold = 5;
+    private int    _totalSamples   = 0;
+    private int    _runningSamples = 0;
+    private double _sessionMaxTemp = 0.0;
+
+    private Panel pnlDiagnostics     = new();
+    private Label lblDiagCommStatus  = new();
+    private Label lblDiagOpRate      = new();
+    private Label lblDiagAvgTemp     = new();
+    private Label lblDiagMaxTemp     = new();
+    private Label lblDiagTodayAlarms = new();
+
+    // ── コンストラクタ ─────────────────────────────────
     public Form1()
     {
         InitializeComponent();
         InitializeHmi();
     }
 
-    // ──────────────────────────────────────────────────
-    //  UI 初期化
-    // ──────────────────────────────────────────────────
+    // ── UI 初期化 ─────────────────────────────────────
     private void InitializeHmi()
     {
-        Text        = "PLC温度監視HMI v3";
+        Text        = "PLC温度監視HMI v4";
         Width       = 1050;
-        Height      = 950;          // v3: 710 → 950（アラーム履歴グリッド追加）
+        Height      = 950;
         MinimumSize = new Size(900, 750);
         BackColor   = Color.FromArgb(22, 22, 36);
 
-        // ── 左側ステータスパネル (265px) ──────────────
+        // 左側ステータスパネル (265px)
         var pnlStatus = new Panel
         {
-            Bounds    = new Rectangle(10, 10, 265, 890), // v3: 650 → 890
+            Bounds    = new Rectangle(10, 10, 265, 890),
             BackColor = Color.FromArgb(30, 30, 46),
         };
 
-        // 接続ラベル
         lblConnection.SetBounds(10, 15, 245, 28);
         lblConnection.Text      = "接続状態：未接続";
         lblConnection.ForeColor = Color.Silver;
         lblConnection.Font      = new Font("Yu Gothic UI", 10);
 
-        // 温度ラベル（大フォント）
         lblTemperature.SetBounds(10, 55, 245, 55);
         lblTemperature.Text      = "現在温度：--- ℃";
         lblTemperature.ForeColor = Color.White;
         lblTemperature.Font      = new Font("Yu Gothic UI", 18, FontStyle.Bold);
 
-        // 稼働状態ラベル
         lblOperation.SetBounds(10, 120, 245, 28);
         lblOperation.Text      = "稼働状態：---";
         lblOperation.ForeColor = Color.Silver;
         lblOperation.Font      = new Font("Yu Gothic UI", 10);
 
-        // 異常状態ラベル
         lblAlarm.SetBounds(10, 158, 245, 46);
         lblAlarm.Text      = "異常状態：---";
         lblAlarm.ForeColor = Color.Silver;
         lblAlarm.Font      = new Font("Yu Gothic UI", 14, FontStyle.Bold);
 
-        // ボタン
         btnConnect.SetBounds(10, 218, 120, 36);
         btnConnect.Text      = "接続開始";
         btnConnect.BackColor = Color.FromArgb(50, 110, 70);
@@ -112,8 +111,7 @@ public partial class Form1 : Form
         btnStop.FlatStyle = FlatStyle.Flat;
         btnStop.FlatAppearance.BorderColor = Color.FromArgb(140, 60, 60);
 
-        // DataGridView（通信ログ）
-        gridLog.SetBounds(10, 270, 245, 610); // v3: 370 → 610（パネル拡張に合わせて伸長）
+        gridLog.SetBounds(10, 270, 245, 610);
         gridLog.AllowUserToAddRows  = false;
         gridLog.ReadOnly            = true;
         gridLog.RowHeadersVisible   = false;
@@ -142,50 +140,41 @@ public partial class Form1 : Form
         pnlStatus.Controls.Add(btnStop);
         pnlStatus.Controls.Add(gridLog);
 
-        // ── 右側チャート（v3: 高さ 650 → 420 に縮小してアラームグリッドの領域を確保）
-        _chart.Bounds    = new Rectangle(285, 10, 750, 420); // v3: 650 → 420
+        // 右側チャート（v4: 420 → 350 に縮小して診断パネル領域を確保）
+        _chart.Bounds    = new Rectangle(285, 10, 750, 350);
         _chart.BackColor = Color.FromArgb(22, 22, 36);
 
         Controls.Add(pnlStatus);
         Controls.Add(_chart);
 
-        // ── イベント・タイマー ──────────────────────────
         btnConnect.Click += BtnConnect_Click;
         btnStop.Click    += BtnStop_Click;
-
         _timer.Interval = 1000;
         _timer.Tick    += Timer_Tick;
 
         SetupChart();
-        SetupAlarmGrid(); // v3 追加
+        SetupDiagnosticsPanel(); // v4 追加
+        SetupAlarmGrid();
     }
 
-    // ──────────────────────────────────────────────────
-    //  チャート初期設定（変更なし）
-    // ──────────────────────────────────────────────────
+    // ── チャート初期設定（変更なし） ──────────────────────
     private void SetupChart()
     {
         var plot = _chart.Plot;
-
         plot.FigureBackground.Color = ScottPlot.Color.FromColor(Color.FromArgb(22, 22, 36));
         plot.DataBackground.Color   = ScottPlot.Color.FromColor(Color.FromArgb(28, 28, 44));
         plot.Axes.Color(ScottPlot.Color.FromColor(Color.Silver));
-
         plot.Title("温度トレンド（直近10分）");
         plot.YLabel("温度 (℃)");
         plot.Axes.DateTimeTicksBottom();
-
         var alarm = plot.Add.HorizontalLine(AlarmTemperature);
         alarm.Color       = ScottPlot.Color.FromColor(Color.OrangeRed);
         alarm.LineWidth   = 1.5f;
         alarm.LinePattern = ScottPlot.LinePattern.Dashed;
-
         _chart.Refresh();
     }
 
-    // ──────────────────────────────────────────────────
-    //  チャート更新（変更なし）
-    // ──────────────────────────────────────────────────
+    // ── チャート更新（変更なし） ──────────────────────────
     private void UpdateChart(double temperature)
     {
         _chartTimes.Add(DateTime.Now.ToOADate());
@@ -217,15 +206,68 @@ public partial class Form1 : Form
         _chart.Refresh();
     }
 
-    // ──────────────────────────────────────────────────
-    //  アラーム履歴グリッド初期設定（Version 3）
-    // ──────────────────────────────────────────────────
+    // ── 設備診断パネル初期設定（Version 4） ───────────────
+    private void SetupDiagnosticsPanel()
+    {
+        // セクションラベル: chart 下端(360) + 8px 隙間
+        var lblSection = new Label
+        {
+            Bounds    = new Rectangle(285, 368, 750, 22),
+            Text      = "■ 設備診断サマリ",
+            ForeColor = Color.FromArgb(100, 200, 255),
+            BackColor = Color.FromArgb(22, 22, 36),
+            Font      = new Font("Yu Gothic UI", 10, FontStyle.Bold),
+        };
+        Controls.Add(lblSection);
+
+        // 診断パネル本体: ラベル下端(390) + 3px 隙間
+        pnlDiagnostics.Bounds    = new Rectangle(285, 393, 750, 120);
+        pnlDiagnostics.BackColor = Color.FromArgb(25, 28, 48);
+        Controls.Add(pnlDiagnostics);
+
+        var labelFont = new Font("Yu Gothic UI", 10);
+
+        // 上段3列 (y=10, h=45)
+        lblDiagCommStatus.SetBounds(10, 10, 235, 45);
+        lblDiagCommStatus.Text      = "通信状態\n---";
+        lblDiagCommStatus.ForeColor = Color.Silver;
+        lblDiagCommStatus.Font      = labelFont;
+
+        lblDiagOpRate.SetBounds(255, 10, 235, 45);
+        lblDiagOpRate.Text      = "稼働率\n---";
+        lblDiagOpRate.ForeColor = Color.Silver;
+        lblDiagOpRate.Font      = labelFont;
+
+        lblDiagTodayAlarms.SetBounds(500, 10, 235, 45);
+        lblDiagTodayAlarms.Text      = "本日アラーム\n---";
+        lblDiagTodayAlarms.ForeColor = Color.Silver;
+        lblDiagTodayAlarms.Font      = labelFont;
+
+        // 下段2列 (y=65, h=45)
+        lblDiagAvgTemp.SetBounds(10, 65, 235, 45);
+        lblDiagAvgTemp.Text      = "平均温度\n---";
+        lblDiagAvgTemp.ForeColor = Color.Silver;
+        lblDiagAvgTemp.Font      = labelFont;
+
+        lblDiagMaxTemp.SetBounds(255, 65, 235, 45);
+        lblDiagMaxTemp.Text      = "最大温度\n---";
+        lblDiagMaxTemp.ForeColor = Color.Silver;
+        lblDiagMaxTemp.Font      = labelFont;
+
+        pnlDiagnostics.Controls.Add(lblDiagCommStatus);
+        pnlDiagnostics.Controls.Add(lblDiagOpRate);
+        pnlDiagnostics.Controls.Add(lblDiagTodayAlarms);
+        pnlDiagnostics.Controls.Add(lblDiagAvgTemp);
+        pnlDiagnostics.Controls.Add(lblDiagMaxTemp);
+    }
+
+    // ── アラーム履歴グリッド初期設定（v4: y座標調整） ─────
     private void SetupAlarmGrid()
     {
-        // セクションラベル
+        // セクションラベル: pnlDiagnostics 下端(513) + 8px 隙間
         var lblAlarmSection = new Label
         {
-            Bounds    = new Rectangle(285, 440, 750, 22),
+            Bounds    = new Rectangle(285, 521, 750, 22),
             Text      = "■ アラーム履歴",
             ForeColor = Color.FromArgb(255, 120, 80),
             BackColor = Color.FromArgb(22, 22, 36),
@@ -233,8 +275,8 @@ public partial class Form1 : Form
         };
         Controls.Add(lblAlarmSection);
 
-        // アラーム履歴グリッド
-        gridAlarm.Bounds            = new Rectangle(285, 465, 750, 425);
+        // アラーム履歴グリッド: ラベル下端(543) + 3px 隙間
+        gridAlarm.Bounds              = new Rectangle(285, 546, 750, 340);
         gridAlarm.AllowUserToAddRows  = false;
         gridAlarm.ReadOnly            = true;
         gridAlarm.RowHeadersVisible   = false;
@@ -257,25 +299,103 @@ public partial class Form1 : Form
         Controls.Add(gridAlarm);
     }
 
-    // ──────────────────────────────────────────────────
-    //  アラーム状態管理（Version 3）
-    // ──────────────────────────────────────────────────
+    // ── 設備診断更新（Version 4） ─────────────────────────
 
-    // Timer_Tick から毎秒呼び出される。60℃の立ち上がり/立ち下がりエッジを検出する。
+    private void UpdateDiagnostics(double temperature, ushort rawValue)
+    {
+        _commFailCount  = 0;
+        _totalSamples++;
+        if (rawValue != 0) _runningSamples++;
+        _sessionMaxTemp = Math.Max(_sessionMaxTemp, temperature);
+
+        var stats = BuildDiagnosticsStats(temperature, rawValue);
+        UpdateDiagnosticsUI(stats);
+    }
+
+    private void UpdateDiagnosticsOnCommunicationFailure()
+    {
+        _commFailCount++;
+        var stats = new DiagnosticsStats
+        {
+            IsCommunicationLost = _commFailCount >= CommFailThreshold,
+            ConsecutiveErrors   = _commFailCount,
+            OperationRatePct    = _totalSamples > 0
+                                    ? (double)_runningSamples / _totalSamples * 100
+                                    : 0.0,
+            AvgTemperature      = _chartTemps.Count > 0 ? _chartTemps.Average() : 0.0,
+            MaxTemperature      = _sessionMaxTemp,
+            TodayAlarmCount     = _alarmHistories.Count(h => h.StartTime.Date == DateTime.Today),
+        };
+        UpdateDiagnosticsUI(stats);
+    }
+
+    private DiagnosticsStats BuildDiagnosticsStats(double temperature, ushort rawValue)
+    {
+        return new DiagnosticsStats
+        {
+            IsCommunicationLost = false,
+            ConsecutiveErrors   = 0,
+            OperationRatePct    = _totalSamples > 0
+                                    ? (double)_runningSamples / _totalSamples * 100
+                                    : 0.0,
+            AvgTemperature      = _chartTemps.Count > 0 ? _chartTemps.Average() : 0.0,
+            MaxTemperature      = _sessionMaxTemp,
+            TodayAlarmCount     = _alarmHistories.Count(h => h.StartTime.Date == DateTime.Today),
+        };
+    }
+
+    private void UpdateDiagnosticsUI(DiagnosticsStats stats)
+    {
+        // 通信状態
+        if (stats.IsCommunicationLost)
+        {
+            lblDiagCommStatus.Text      = "通信状態\n通信断";
+            lblDiagCommStatus.ForeColor = Color.OrangeRed;
+        }
+        else if (stats.ConsecutiveErrors > 0)
+        {
+            lblDiagCommStatus.Text      = $"通信状態\n不安定({stats.ConsecutiveErrors}回)";
+            lblDiagCommStatus.ForeColor = Color.Orange;
+        }
+        else
+        {
+            lblDiagCommStatus.Text      = "通信状態\n✓ 正常";
+            lblDiagCommStatus.ForeColor = Color.LimeGreen;
+        }
+
+        // 稼働率
+        lblDiagOpRate.Text      = $"稼働率\n{stats.OperationRatePct:F1} %";
+        lblDiagOpRate.ForeColor = stats.OperationRatePct >= 80 ? Color.LimeGreen : Color.Orange;
+
+        // 本日アラーム
+        lblDiagTodayAlarms.Text      = $"本日アラーム\n{stats.TodayAlarmCount} 回";
+        lblDiagTodayAlarms.ForeColor = stats.TodayAlarmCount == 0 ? Color.LimeGreen : Color.OrangeRed;
+
+        // 平均温度
+        lblDiagAvgTemp.Text      = $"平均温度\n{stats.AvgTemperature:F1} ℃";
+        lblDiagAvgTemp.ForeColor = Color.CornflowerBlue;
+
+        // 最大温度
+        lblDiagMaxTemp.Text      = $"最大温度\n{stats.MaxTemperature:F1} ℃";
+        lblDiagMaxTemp.ForeColor = stats.MaxTemperature > AlarmTemperature
+                                    ? Color.OrangeRed
+                                    : Color.CornflowerBlue;
+    }
+
+    // ── アラーム状態管理（Version 3、変更なし） ────────────
+
     private void UpdateAlarmHistory(double temperature, string alarmStatus)
     {
         if (alarmStatus == "異常")
         {
             if (!_isAlarm)
             {
-                // アラーム開始（立ち上がりエッジ）
                 _isAlarm        = true;
                 _alarmStartTime = DateTime.Now;
                 _alarmMaxTemp   = temperature;
             }
             else if (temperature > _alarmMaxTemp)
             {
-                // 継続中：最大温度を更新
                 _alarmMaxTemp = temperature;
             }
         }
@@ -283,7 +403,6 @@ public partial class Form1 : Form
         {
             if (_isAlarm)
             {
-                // アラーム復旧（立ち下がりエッジ）
                 _isAlarm = false;
                 var endTime = DateTime.Now;
                 RegisterAlarm(new AlarmHistory
@@ -299,12 +418,10 @@ public partial class Form1 : Form
 
     private void RegisterAlarm(AlarmHistory alarm)
     {
-        // メモリリスト（最大 100 件、新しい順）
         _alarmHistories.Insert(0, alarm);
         if (_alarmHistories.Count > MaxAlarmHistory)
             _alarmHistories.RemoveAt(_alarmHistories.Count - 1);
 
-        // DataGridView 更新（先頭行に挿入）
         gridAlarm.Rows.Insert(0,
             alarm.StartTime.ToString("HH:mm:ss"),
             alarm.EndTime.HasValue ? alarm.EndTime.Value.ToString("HH:mm:ss") : "-",
@@ -314,7 +431,6 @@ public partial class Form1 : Form
         if (gridAlarm.Rows.Count > MaxAlarmHistory)
             gridAlarm.Rows.RemoveAt(gridAlarm.Rows.Count - 1);
 
-        // CSV 保存
         SaveAlarmToCsv(alarm);
     }
 
@@ -323,15 +439,12 @@ public partial class Form1 : Form
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(AlarmCsvPath)!);
-
             bool writeHeader = !File.Exists(AlarmCsvPath);
             using var sw = new StreamWriter(
                 AlarmCsvPath, append: true,
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
-
             if (writeHeader)
                 sw.WriteLine("発生時刻,復旧時刻,継続時間(秒),最大温度(℃)");
-
             sw.WriteLine(string.Join(",",
                 alarm.StartTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 alarm.EndTime.HasValue
@@ -346,12 +459,16 @@ public partial class Form1 : Form
         }
     }
 
-    // ──────────────────────────────────────────────────
-    //  既存メソッド（ロジック変更なし）
-    // ──────────────────────────────────────────────────
+    // ── ボタン・タイマーハンドラ（v4: 修正あり） ────────────
 
     private void BtnConnect_Click(object? sender, EventArgs e)
     {
+        // v4: 接続開始時に診断カウンタをリセット
+        _totalSamples   = 0;
+        _runningSamples = 0;
+        _sessionMaxTemp = 0.0;
+        _commFailCount  = 0;
+
         var result = _modbus.ConnectServer();
 
         if (result.IsSuccess)
@@ -382,6 +499,7 @@ public partial class Form1 : Form
         {
             lblConnection.Text      = "接続状態：読取失敗";
             lblConnection.ForeColor = Color.Red;
+            UpdateDiagnosticsOnCommunicationFailure(); // v4 追加
             return;
         }
 
@@ -411,6 +529,7 @@ public partial class Form1 : Form
             gridLog.Rows.RemoveAt(gridLog.Rows.Count - 1);
 
         UpdateChart(temperature);
-        UpdateAlarmHistory(temperature, alarmStatus); // v3 追加
+        UpdateAlarmHistory(temperature, alarmStatus);
+        UpdateDiagnostics(temperature, rawValue); // v4 追加
     }
 }
