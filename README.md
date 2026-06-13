@@ -172,6 +172,16 @@ HMI表示、
 - DiagnosticsStatsクラス（initプロパティ）による診断データのイミュータブル設計
 - チャートとアラーム履歴の間に診断パネルを配置（2ペイン→3セクション構成）
 
+### 予兆保全PoC（Version 4 Phase 4b）
+- 温度上昇率：直近5分（最大300サンプル）の温度差を毎秒計算（+3.2 ℃ / 5分 形式で表示）
+- 予兆アラート判定（PredictiveAlertEvaluator）
+  - Normal：上昇率 < 3℃ かつ アラーム1回以下
+  - Warning：上昇率 >= 3℃ または 本日アラーム2回以上
+  - Critical：上昇率 >= 5℃ または 最大温度 >= 70℃
+- AlertLevel enum（Normal / Warning / Critical）によるレベル管理
+- 診断パネルに「温度上昇率」「予兆状態」行を追加（Green→Orange→OrangeRed で色変化）
+- 設備監視から予兆保全PoCへ進化（設備の状態変化を先読みして警告）
+
 ### ログ保存
 - CSV形式で監視ログを保存
 - 日付ごとのログファイル生成
@@ -253,6 +263,7 @@ bin/Debug/net8.0/Logs/
 - ~~リアルタイムグラフ表示~~ ✅ Version 2 で実装済み
 - ~~アラーム履歴管理~~ ✅ Version 3 で実装済み
 - ~~設備診断サマリ（通信断/稼働率/平均温度/最大温度/本日アラーム）~~ ✅ Version 4 Phase 4a で実装済み
+- ~~予兆保全PoC（温度上昇率・予兆アラート・AlertLevel判定）~~ ✅ Version 4 Phase 4b で実装済み
 - PLC書込み機能追加
 - MQTT/REST API連携
 - データベース保存対応

@@ -54,6 +54,10 @@ public partial class Form1 : Form
     private Label lblDiagMaxTemp     = new();
     private Label lblDiagTodayAlarms = new();
 
+    // Version 4 Phase 4b: 予兆保全フィールド
+    private Label lblDiagRiseRate   = new();
+    private Label lblDiagPredictive = new();
+
     // ── コンストラクタ ─────────────────────────────────
     public Form1()
     {
@@ -221,7 +225,7 @@ public partial class Form1 : Form
         Controls.Add(lblSection);
 
         // 診断パネル本体: ラベル下端(390) + 3px 隙間
-        pnlDiagnostics.Bounds    = new Rectangle(285, 393, 750, 120);
+        pnlDiagnostics.Bounds    = new Rectangle(285, 393, 750, 175); // v4b: 120→175
         pnlDiagnostics.BackColor = Color.FromArgb(25, 28, 48);
         Controls.Add(pnlDiagnostics);
 
@@ -254,11 +258,24 @@ public partial class Form1 : Form
         lblDiagMaxTemp.ForeColor = Color.Silver;
         lblDiagMaxTemp.Font      = labelFont;
 
+        // 第3行 (y=120, h=45): 温度上昇率 | 予兆状態（v4b）
+        lblDiagRiseRate.SetBounds(10, 120, 235, 45);
+        lblDiagRiseRate.Text      = "温度上昇率\n---";
+        lblDiagRiseRate.ForeColor = Color.Silver;
+        lblDiagRiseRate.Font      = labelFont;
+
+        lblDiagPredictive.SetBounds(255, 120, 235, 45);
+        lblDiagPredictive.Text      = "予兆状態\n---";
+        lblDiagPredictive.ForeColor = Color.Silver;
+        lblDiagPredictive.Font      = labelFont;
+
         pnlDiagnostics.Controls.Add(lblDiagCommStatus);
         pnlDiagnostics.Controls.Add(lblDiagOpRate);
         pnlDiagnostics.Controls.Add(lblDiagTodayAlarms);
         pnlDiagnostics.Controls.Add(lblDiagAvgTemp);
         pnlDiagnostics.Controls.Add(lblDiagMaxTemp);
+        pnlDiagnostics.Controls.Add(lblDiagRiseRate);
+        pnlDiagnostics.Controls.Add(lblDiagPredictive);
     }
 
     // ── アラーム履歴グリッド初期設定（v4: y座標調整） ─────
@@ -267,7 +284,7 @@ public partial class Form1 : Form
         // セクションラベル: pnlDiagnostics 下端(513) + 8px 隙間
         var lblAlarmSection = new Label
         {
-            Bounds    = new Rectangle(285, 521, 750, 22),
+            Bounds    = new Rectangle(285, 576, 750, 22),  // v4b: 521→576 (+55)
             Text      = "■ アラーム履歴",
             ForeColor = Color.FromArgb(255, 120, 80),
             BackColor = Color.FromArgb(22, 22, 36),
@@ -276,7 +293,7 @@ public partial class Form1 : Form
         Controls.Add(lblAlarmSection);
 
         // アラーム履歴グリッド: ラベル下端(543) + 3px 隙間
-        gridAlarm.Bounds              = new Rectangle(285, 546, 750, 340);
+        gridAlarm.Bounds              = new Rectangle(285, 601, 750, 285); // v4b: 546→601, 340→285
         gridAlarm.AllowUserToAddRows  = false;
         gridAlarm.ReadOnly            = true;
         gridAlarm.RowHeadersVisible   = false;
@@ -308,8 +325,10 @@ public partial class Form1 : Form
         if (rawValue != 0) _runningSamples++;
         _sessionMaxTemp = Math.Max(_sessionMaxTemp, temperature);
 
-        var stats = BuildDiagnosticsStats(temperature, rawValue);
-        UpdateDiagnosticsUI(stats);
+        var stats   = BuildDiagnosticsStats(temperature, rawValue);
+        double rise = PredictiveAlertEvaluator.CalculateRiseRate(_chartTemps);
+        var    alert = PredictiveAlertEvaluator.Evaluate(rise, _sessionMaxTemp, stats.TodayAlarmCount);
+        UpdateDiagnosticsUI(stats, rise, alert);
     }
 
     private void UpdateDiagnosticsOnCommunicationFailure()
@@ -326,7 +345,9 @@ public partial class Form1 : Form
             MaxTemperature      = _sessionMaxTemp,
             TodayAlarmCount     = _alarmHistories.Count(h => h.StartTime.Date == DateTime.Today),
         };
-        UpdateDiagnosticsUI(stats);
+        double rise  = PredictiveAlertEvaluator.CalculateRiseRate(_chartTemps);
+        var    alert = PredictiveAlertEvaluator.Evaluate(rise, _sessionMaxTemp, stats.TodayAlarmCount);
+        UpdateDiagnosticsUI(stats, rise, alert);
     }
 
     private DiagnosticsStats BuildDiagnosticsStats(double temperature, ushort rawValue)
@@ -344,7 +365,7 @@ public partial class Form1 : Form
         };
     }
 
-    private void UpdateDiagnosticsUI(DiagnosticsStats stats)
+    private void UpdateDiagnosticsUI(DiagnosticsStats stats, double riseRate, PredictiveAlertResult alert)
     {
         // 通信状態
         if (stats.IsCommunicationLost)
@@ -380,6 +401,30 @@ public partial class Form1 : Form
         lblDiagMaxTemp.ForeColor = stats.MaxTemperature > AlarmTemperature
                                     ? Color.OrangeRed
                                     : Color.CornflowerBlue;
+
+        // 温度上昇率（v4b）
+        if (_chartTemps.Count >= 2)
+        {
+            string sign = riseRate >= 0 ? "+" : "";
+            lblDiagRiseRate.Text      = $"温度上昇率\n{sign}{riseRate:F1} ℃ / 5分";
+            lblDiagRiseRate.ForeColor = riseRate >= 5.0 ? Color.OrangeRed
+                                      : riseRate >= 3.0 ? Color.Orange
+                                      : Color.CornflowerBlue;
+        }
+        else
+        {
+            lblDiagRiseRate.Text      = "温度上昇率\n---";
+            lblDiagRiseRate.ForeColor = Color.Silver;
+        }
+
+        // 予兆状態（v4b）
+        lblDiagPredictive.Text      = $"予兆状態\n{alert.Message}";
+        lblDiagPredictive.ForeColor = alert.Level switch
+        {
+            AlertLevel.Critical => Color.OrangeRed,
+            AlertLevel.Warning  => Color.Orange,
+            _                   => Color.LimeGreen,
+        };
     }
 
     // ── アラーム状態管理（Version 3、変更なし） ────────────
