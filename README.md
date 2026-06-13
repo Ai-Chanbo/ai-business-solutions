@@ -1,3 +1,106 @@
+# Manufacturing DX / AI Monitoring System
+
+製造業向け設備監視・AI/DXを想定したポートフォリオプロジェクトです。
+
+本プロジェクトでは、
+
+* PLC通信
+* 設備監視
+* HMI表示
+* 異常検知
+* CSVログ管理
+* Web可視化
+* AI/DX構想
+
+をテーマとして、
+C# / Modbus TCP / Next.js を組み合わせたシステム開発を行っています。
+
+---
+
+# Project Overview
+
+設備保全経験とC#開発経験を活かし、
+製造業の現場監視を想定したシステムを作成しました。
+
+単なるWeb制作ではなく、
+
+* 現場データ取得
+* PLC通信
+* 設備状態監視
+* AI連携を想定した構成
+* 将来的なIoT/DX拡張
+
+まで考慮して設計しています。
+
+---
+
+# Manufacturing DX Concept
+
+```text
+PLC
+↓
+Modbus TCP
+↓
+C# Monitoring System
+↓
+FastAPI
+↓
+AI Inference
+↓
+Visualization / Alert
+```
+
+製造業では、
+AIモデルそのものだけではなく、
+
+* 現場データ取得
+* 設備通信
+* 運用保守
+* 可視化
+* 異常検知
+
+まで含めた設計が重要になります。
+
+---
+
+# Corporate Site
+
+製造業向けAI/DX企業を想定した
+Next.js製コーポレートサイトも実装しています。
+
+## 使用技術
+
+* Next.js 15
+* TypeScript
+* Tailwind CSS
+* Framer Motion
+* React Hook Form
+* Zod
+
+## 実装内容
+
+* ダークUI
+* レスポンシブ対応
+* 問い合わせフォーム
+* FastAPI連携想定
+* AI/DX向けデザイン
+* 製造業向けサービス構成
+
+---
+
+# Future Vision
+
+今後は以下の機能追加を予定しています。
+
+* MQTT連携
+* ONNX Runtime
+* AI異常検知
+* Azure連携
+* Docker対応
+* リアルタイムグラフ表示
+* IoTダッシュボード化
+
+
 # PLC温度監視システム
 
 ## 1. システム概要
@@ -26,6 +129,7 @@ HMI表示、
 - .NET 8 LTS
 - HslCommunication
 - Modbus TCP
+- ScottPlot.WinForms 5.1.58（リアルタイムグラフ）
 - VS Code
 - ModRSsim2
 
@@ -46,6 +150,12 @@ HMI表示、
 ### 異常検知
 - 温度閾値超過時に異常判定
 - コンソール上で異常メッセージを赤文字表示
+
+### リアルタイム温度グラフ（Version 2）
+- ScottPlot.WinFormsによる温度推移グラフ表示
+- 直近10分（最大600点）の温度履歴を可視化
+- 60℃アラーム閾値ラインをグラフ上に常時表示
+- ダークテーマUI（左側ステータス＋右側チャートの2ペイン構成）
 
 ### ログ保存
 - CSV形式で監視ログを保存
@@ -125,7 +235,7 @@ bin/Debug/net8.0/Logs/
 ## 7. 今後の改善
 
 - WPF版への拡張
-- リアルタイムグラフ表示
+- ~~リアルタイムグラフ表示~~ ✅ Version 2 で実装済み
 - PLC書込み機能追加
 - MQTT/REST API連携
 - データベース保存対応
@@ -154,6 +264,9 @@ ModRSsim2（PLCシミュレーター）
 - DataGridViewでリアルタイムログ監視を実装
 - 温度閾値による異常検知を追加
 - 通信失敗時の状態表示を実装
+- ScottPlotによるリアルタイム温度グラフを追加（Version 2）
+- 直近10分の温度トレンドをCornflowerBlueの折れ線で可視化
+- 60℃アラーム閾値ラインをOrangeRedの破線で常時表示
 
 ## 想定課題
 
