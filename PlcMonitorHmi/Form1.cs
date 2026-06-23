@@ -11,6 +11,7 @@ public partial class Form1 : Form
     // ── 既存フィールド（変更なし） ────────────────────────
     private readonly ModbusTcpNet _modbus = new("127.0.0.1", 502);
     private readonly System.Windows.Forms.Timer _timer = new();
+    private readonly AzureIoTHubTelemetryService _telemetryService = new();
 
     private DataGridView gridLog        = new();
     private Label        lblConnection  = new();
@@ -526,6 +527,7 @@ public partial class Form1 : Form
         {
             lblConnection.Text      = "接続状態：接続失敗";
             lblConnection.ForeColor = Color.Red;
+            _timer.Start();
         }
     }
 
@@ -538,13 +540,18 @@ public partial class Form1 : Form
 
     private void Timer_Tick(object? sender, EventArgs e)
     {
+        try
+        {
         var result = _modbus.ReadUInt16("1", 1);
 
-        if (!result.IsSuccess)
+        if (!result.IsSuccess || result.Content is null || result.Content.Length == 0)
         {
             lblConnection.Text      = "接続状態：読取失敗";
             lblConnection.ForeColor = Color.Red;
             UpdateDiagnosticsOnCommunicationFailure(); // v4 追加
+            var disconnectedTelemetryPayload = _telemetryService.CreateDisconnectedPayload(
+                result.Message ?? "Modbus read failed.");
+            _ = _telemetryService.WriteTelemetryAsync(disconnectedTelemetryPayload);
             return;
         }
 
@@ -576,5 +583,17 @@ public partial class Form1 : Form
         UpdateChart(temperature);
         UpdateAlarmHistory(temperature, alarmStatus);
         UpdateDiagnostics(temperature, rawValue); // v4 追加
+
+        var telemetryPayload = _telemetryService.CreatePayload(
+            rawValue,
+            temperature,
+            operationStatus,
+            alarmStatus);
+        _ = _telemetryService.WriteTelemetryAsync(telemetryPayload);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Timer_Tick failed: {ex}");
+        }
     }
 }
