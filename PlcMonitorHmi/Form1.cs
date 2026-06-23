@@ -12,6 +12,9 @@ public partial class Form1 : Form
     private readonly ModbusTcpNet _modbus = new("127.0.0.1", 502);
     private readonly System.Windows.Forms.Timer _timer = new();
     private readonly AzureIoTHubTelemetryService _telemetryService = new();
+    private readonly Random _demoRandom = new();
+    private bool _isDemoMode;
+    private double _demoPhase;
 
     private DataGridView gridLog        = new();
     private Label        lblConnection  = new();
@@ -64,6 +67,12 @@ public partial class Form1 : Form
     {
         InitializeComponent();
         InitializeHmi();
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        _telemetryService.Dispose();
+        base.OnFormClosed(e);
     }
 
     // ── UI 初期化 ─────────────────────────────────────
@@ -519,14 +528,16 @@ public partial class Form1 : Form
 
         if (result.IsSuccess)
         {
+            _isDemoMode = false;
             lblConnection.Text      = "接続状態：接続成功";
             lblConnection.ForeColor = Color.LimeGreen;
             _timer.Start();
         }
         else
         {
-            lblConnection.Text      = "接続状態：接続失敗";
-            lblConnection.ForeColor = Color.Red;
+            _isDemoMode = true;
+            lblConnection.Text      = "接続状態：接続失敗（デモモード）";
+            lblConnection.ForeColor = Color.OrangeRed;
             _timer.Start();
         }
     }
@@ -534,29 +545,58 @@ public partial class Form1 : Form
     private void BtnStop_Click(object? sender, EventArgs e)
     {
         _timer.Stop();
+        _isDemoMode = false;
         lblConnection.Text      = "接続状態：停止中";
         lblConnection.ForeColor = Color.Black;
+    }
+
+    private double GenerateDemoTemperature()
+    {
+        _demoPhase += 0.35;
+        double baseTemperature = 60.0 + Math.Sin(_demoPhase) * 8.0;
+        double noise = (_demoRandom.NextDouble() - 0.5) * 2.0;
+
+        return Math.Clamp(baseTemperature + noise, 50.0, 70.0);
+    }
+
+    private static ushort ConvertTemperatureToRawValue(double temperature)
+    {
+        double scaledValue = Math.Round(temperature * TemperatureScale);
+        return (ushort)Math.Clamp(scaledValue, ushort.MinValue, ushort.MaxValue);
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
     {
         try
         {
-        var result = _modbus.ReadUInt16("1", 1);
+        ushort rawValue;
+        double temperature;
 
-        if (!result.IsSuccess || result.Content is null || result.Content.Length == 0)
+        if (_isDemoMode)
         {
-            lblConnection.Text      = "接続状態：読取失敗";
-            lblConnection.ForeColor = Color.Red;
-            UpdateDiagnosticsOnCommunicationFailure(); // v4 追加
-            var disconnectedTelemetryPayload = _telemetryService.CreateDisconnectedPayload(
-                result.Message ?? "Modbus read failed.");
-            _ = _telemetryService.WriteTelemetryAsync(disconnectedTelemetryPayload);
-            return;
+            temperature = GenerateDemoTemperature();
+            rawValue = ConvertTemperatureToRawValue(temperature);
+            lblConnection.Text      = "接続状態：デモモード";
+            lblConnection.ForeColor = Color.OrangeRed;
         }
+        else
+        {
+            var result = _modbus.ReadUInt16("1", 1);
 
-        ushort rawValue    = result.Content[0];
-        double temperature = rawValue / TemperatureScale;
+            if (!result.IsSuccess || result.Content is null || result.Content.Length == 0)
+            {
+                lblConnection.Text      = "接続状態：読取失敗";
+                lblConnection.ForeColor = Color.Red;
+                UpdateDiagnosticsOnCommunicationFailure(); // v4 追加
+                var disconnectedTelemetryPayload = _telemetryService.CreateDisconnectedPayload(
+                    result.Message ?? "Modbus read failed.");
+                _ = _telemetryService.WriteTelemetryAsync(disconnectedTelemetryPayload);
+                return;
+            }
+
+            rawValue    = result.Content[0];
+            temperature = rawValue / TemperatureScale;
+        }
 
         string operationStatus = rawValue == 0 ? "停止中" : "稼働中";
         string alarmStatus     = temperature > AlarmTemperature ? "異常" : "正常";
@@ -588,7 +628,8 @@ public partial class Form1 : Form
             rawValue,
             temperature,
             operationStatus,
-            alarmStatus);
+            alarmStatus,
+            _isDemoMode ? "Demo" : "Connected");
         _ = _telemetryService.WriteTelemetryAsync(telemetryPayload);
         }
         catch (Exception ex)

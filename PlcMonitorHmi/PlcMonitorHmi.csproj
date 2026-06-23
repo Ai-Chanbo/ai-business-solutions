@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Devices.Client" Version="1.42.3" />
     <PackageReference Include="ScottPlot.WinForms" Version="5.1.58" />
   </ItemGroup>
 
