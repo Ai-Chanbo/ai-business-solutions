@@ -1,3 +1,10 @@
 bin/
 obj/
 .vs/
+.env
+.env.*
+local.settings.json
+*.publishsettings
+PlcTelemetryFunction/function.zip
+PlcTelemetryFunction/publish/
+exports/*.csv
