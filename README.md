@@ -114,6 +114,25 @@ PlcMonitorApp/
 - Cosmos DB BadRequest 400 の原因調査と修正
 - Power BI ダッシュボード設計書作成
 
+## PLC Temperature Monitoring HMI
+
+WinForms / C# で実装したPLC温度監視用HMIです。  
+PLC値、温度、稼働状態、異常状態を監視し、設備診断サマリとアラーム履歴を表示します。
+
+![PLC Temperature Monitoring HMI](docs/images/hmi-ui-final.png)
+
+### HMI Features
+
+- Real-time temperature monitoring
+- PLC raw value display
+- Operation status display
+- Alarm status display
+- Temperature trend chart
+- Equipment diagnostic summary
+- Alarm history table
+- Dark industrial HMI style
+- Responsive layout adjustment
+
 ## Power BI Dashboard
 
 Power BI Desktop で Cosmos DB telemetry / CSV demo data を読み込み、製造業向け IoT 設備監視ダッシュボードを作成しました。
